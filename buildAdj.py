@@ -89,7 +89,7 @@ def build_hetereogenous_graph(tf_idf, pmi_matrix):
 
 
 def load_20ng(category, **kargs):
-    if category == 'all':
+    if category == ['all']:
         category = None
     data_20ng = fetch_20newsgroups(subset='all', categories=category)
     doc_list = data_20ng.data

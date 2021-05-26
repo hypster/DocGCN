@@ -12,6 +12,11 @@ from torch.nn.functional import relu, dropout
 import copy
 import random
 from dataLoader import *
+from scipy.sparse import identity
+
+# only set if your env is gpu
+# torch.backends.cudnn.benchmark = True
+# torch.backends.cudnn.enabled = True
 
 
 class GCN(torch.nn.Module):
@@ -96,30 +101,21 @@ def test(model, data, train_idx, val_idx):
 
     return train_acc, valid_acc
 
-
-if __name__ == "__main__":
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print('Device: {}'.format(device))
-    parent = os.path.join(os.path.dirname(__file__), "data")
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--file', required=True)
-    args = parser.parse_args()
-    args = vars(args)
-    file = args['file']
-    if file not in ('20ng', 'ned_company'):
-        print("file is not recognized")
-        exit()
-
+def main(device, parent, file):
     edge_index, edge_weight = load_edge_index_weight(file)
     edge_index = torch.LongTensor(edge_index)
     edge_weight = torch.FloatTensor(edge_weight)
     y = load_labels(file)
     vocab_size = len(load_word_list(file))
-    print("pmi sub matrix size: (%d, %d)" %(vocab_size, vocab_size))
+    print("pmi sub matrix size: (%d, %d)" % (vocab_size, vocab_size))
     n = len(y) + vocab_size
     print("adjacency matrix size: (%d, %d)" % (n, n))
 
-    document_idx = [i for i in range(vocab_size, n)] # document index in the adjacency matrix, the start and end index of the bottom right sub matrix
+
+    document_idx = [i for i in range(vocab_size,
+                                     n)]  # document index in the adjacency matrix, the start and end index of the bottom right sub matrix
+
+
     total_idx = random.sample(document_idx, len(document_idx))
     train_val_ratio = 0.8
     train_size = int(len(total_idx) * train_val_ratio)
@@ -127,16 +123,23 @@ if __name__ == "__main__":
     val_idx = total_idx[train_size:]
 
     # x = torch.ones(size=(len(adj), 20))
-    x = F.one_hot(torch.arange(n)).type(torch.FloatTensor) # one-hot encoding
+    # x = F.one_hot(torch.arange(n))  # one-hot encoding
+    x = identity(n, format='coo')
+    i = np.vstack([x.row, x.col])
+    v = x.data
+    x = torch.sparse_coo_tensor(i, v, x.shape, dtype=torch.float)
+
     num_classes = max(y) + 1
     y = torch.LongTensor(y)
 
     print("num of classes: %d" % num_classes)
-    data = Data(x=x, edge_index=edge_index, edge_weight = edge_weight, train_idx = train_idx, val_idx = val_idx, y=y, num_classes = num_classes)
+    data = Data(x=x, edge_index=edge_index, edge_weight=edge_weight, train_idx=train_idx, val_idx=val_idx, y=y,
+                num_classes=num_classes).to(device)
+
+    # del edge_index, edge_weight, y
 
     # Make the adjacency matrix to symmetric
 
-    data = data.to(device)
     # split_idx = dataset.get_idx_split()
     # train_idx = split_idx['train'].to(device)
 
@@ -164,11 +167,12 @@ if __name__ == "__main__":
     #
     # reset the parameters to initial random value
     model.reset_parameters()
+    # torch.optim.sparse_adam
+    # optimizer = torch.optim.SparseAdam(model.parameters(), lr=args['lr'])
     optimizer = torch.optim.Adam(model.parameters(), lr=args['lr'])
     loss_fn = torch.nn.CrossEntropyLoss()
     # loss_fn = F.nll_loss()
 
-    best_model = None
     best_valid_acc = 0
 
     for epoch in range(1, 1 + args["epochs"]):
@@ -178,14 +182,27 @@ if __name__ == "__main__":
         train_acc, valid_acc = result
         if valid_acc > best_valid_acc:
             best_valid_acc = valid_acc
-            best_model = copy.deepcopy(model)
-            with open(os.path.join(parent, file, "deprecated/model"), 'wb') as f:
-                pickle.dump(best_model, f)
+            with open(os.path.join(parent, file + "_model"), 'wb') as f:
+                pickle.dump(model, f)
         print(f'Epoch: {epoch:02d}, '
               f'Loss: {loss:.4f}, '
               f'Train: {100 * train_acc:.2f}%, '
               f'Valid: {100 * valid_acc:.2f}% ')
 
 
+if __name__ == "__main__":
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print('Device: {}'.format(device))
+    parent = os.path.join(os.path.dirname(__file__), "model_trained")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--file', required=True)
+    args = parser.parse_args()
+    args = vars(args)
+    file = args['file']
+    if file not in ('20ng', 'ned_company'):
+        print("file is not recognized")
+        exit()
+
+    main(device, parent, file)
 
 

@@ -32,6 +32,7 @@ def load_pmi_matrix(dataset):
         pmi = pickle.load(f)
     return pmi
 
+
 def load_edge_index_weight(dataset, k=1):
     """ load adjacency matrix and transform into edge_index
     :return: edge_index, dtype torch.long
