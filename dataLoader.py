@@ -1,5 +1,6 @@
 import os
 import pickle
+from sklearn.datasets import fetch_20newsgroups
 
 import torch
 import numpy as np
@@ -11,6 +12,40 @@ from sklearn.preprocessing import normalize
 from scipy.sparse import csr_matrix, coo_matrix
 
 data_dir = os.path.join(os.path.dirname(__file__), "data")
+
+def load_20ng(category, **kargs):
+    if category == ['all']:
+        category = None
+    data_20ng = fetch_20newsgroups(subset='all', categories=category)
+    doc_list = data_20ng.data
+    y = data_20ng.target
+    return doc_list, y
+
+
+
+def load_Ned_company(parent):
+    with open(os.path.join(parent, "data", "ned_company"), 'rb') as f:
+        data = pickle.load(f)
+
+    x,labels = list(zip(*data))
+    set_label = set(label for label in labels)
+    label2target = {label: i for i, label in enumerate(set_label)}
+    with open(os.path.join(parent, "ned_company", "label2target"), 'wb') as f:
+        pickle.dump(label2target, f)
+    y = []
+    for label in labels:
+        y.append(label2target[label])
+    return x,y
+
+def load_idx_pos_map(dataset):
+    m = load_word_key_map(dataset)
+    wl = load_word_list(dataset)
+    return {m[w]: i for i, w in enumerate(wl)}
+
+def load_word_key_map(dataset):
+    with open(os.path.join(data_dir, dataset, 'word_key_map'), 'rb') as f:
+        m = pickle.load(f)
+    return m
 
 def load_labels(dataset):
     with open(os.path.join(data_dir, dataset, 'y'), 'rb') as f:
@@ -27,11 +62,25 @@ def load_adj(dataset):
         adj = pickle.load(f)
     return adj
 
-def load_pmi_matrix(dataset):
-    with open(os.path.join(data_dir, dataset, 'pmi'), 'rb') as f:
-        pmi = pickle.load(f)
-    return pmi
+# def load_pmi_matrix(dataset):
+#     with open(os.path.join(data_dir, dataset, 'pmi'), 'rb') as f:
+#         pmi = pickle.load(f)
+#     return pmi
 
+def load_graph_list(dataset):
+    with open(os.path.join(data_dir, dataset, 'ind_graph'), 'rb') as f:
+        return pickle.load(f)
+
+def load_indexed_tokens_list(dataset):
+    with open(os.path.join(data_dir, dataset, 'indexed_tokens_list'), 'rb') as f:
+        return pickle.load(f)
+
+
+def get_20ng_train_size():
+    """the sklearn function only has train and test split, we use train set to split between train and validation set
+    :return:
+    """
+    return fetch_20newsgroups(subset='train').target.shape[0]
 
 def load_edge_index_weight(dataset, k=1):
     """ load adjacency matrix and transform into edge_index

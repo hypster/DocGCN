@@ -1,5 +1,5 @@
 import argparse
-
+import logging
 import torch
 import torch.nn.functional as F
 
@@ -13,10 +13,11 @@ import copy
 import random
 from dataLoader import *
 from scipy.sparse import identity
-
 # only set if your env is gpu
 # torch.backends.cudnn.benchmark = True
 # torch.backends.cudnn.enabled = True
+
+logging.basicConfig(filename='log_tmp', filemode='w', level=logging.INFO, format='%(message)s')
 
 
 class GCN(torch.nn.Module):
@@ -60,17 +61,6 @@ class GCN(torch.nn.Module):
         return x
 
 
-def train(model, data, train_idx, optimizer, loss_fn):
-    model.train()
-    loss = 0
-    optimizer.zero_grad()
-    y_hat = model(data.x, data.edge_index, data.edge_weight)
-    loss = loss_fn(y_hat[data.train_idx], data.y[train_idx]) # reshape(-1) to make target 1d vector
-    loss.backward()
-    optimizer.step()
-
-    return loss.item()
-
 @torch.no_grad()
 def accuracy(pred, labels):
     """
@@ -81,10 +71,21 @@ def accuracy(pred, labels):
     corr = sum(pred.argmax(dim=-1) == labels)
     return corr.item() / labels.shape[0]
 
+def train(model, data, train_idx, optimizer, loss_fn):
+    model.train()
+    optimizer.zero_grad()
+    y_hat = model(data.x, data.edge_index, data.edge_weight)
+    loss = loss_fn(y_hat[data.train_idx], data.y[train_idx]) # reshape(-1) to make target 1d vector
+    loss.backward()
+    optimizer.step()
+    l = loss.item()
+    loss = None
+    return l
+
 
 # Test function here
 @torch.no_grad()
-def test(model, data, train_idx, val_idx):
+def test(model, data, train_idx, val_idx, test_idx):
     """this function tests the model by
     using the given split_idx and evaluator.
     :param model:
@@ -98,8 +99,9 @@ def test(model, data, train_idx, val_idx):
     # pred = F.log_softmax(out, 1)
     train_acc = accuracy(pred[data.train_idx], data.y[train_idx])
     valid_acc = accuracy(pred[data.val_idx], data.y[val_idx])
+    test_acc = accuracy(pred[data.test_idx], data.y[test_idx])
+    return train_acc, valid_acc, test_acc
 
-    return train_acc, valid_acc
 
 def main(device, parent, file):
     edge_index, edge_weight = load_edge_index_weight(file)
@@ -116,11 +118,14 @@ def main(device, parent, file):
                                      n)]  # document index in the adjacency matrix, the start and end index of the bottom right sub matrix
 
 
-    total_idx = random.sample(document_idx, len(document_idx))
-    train_val_ratio = 0.8
-    train_size = int(len(total_idx) * train_val_ratio)
-    train_idx = total_idx[: train_size]
-    val_idx = total_idx[train_size:]
+
+    train_idx, val_idx, test_idx = load_train_val_test_idx(file, document_idx)
+
+    # total_idx = random.sample(document_idx, len(document_idx))
+    # train_val_ratio = 0.8
+    # train_size = int(len(total_idx) * train_val_ratio)
+    # train_idx = total_idx[: train_size]
+    # val_idx = total_idx[train_size:]
 
     # x = torch.ones(size=(len(adj), 20))
     # x = F.one_hot(torch.arange(n))  # one-hot encoding
@@ -133,7 +138,7 @@ def main(device, parent, file):
     y = torch.LongTensor(y)
 
     print("num of classes: %d" % num_classes)
-    data = Data(x=x, edge_index=edge_index, edge_weight=edge_weight, train_idx=train_idx, val_idx=val_idx, y=y,
+    data = Data(x=x, edge_index=edge_index, edge_weight=edge_weight, train_idx=train_idx, val_idx=val_idx, test_idx = test_idx, y=y,
                 num_classes=num_classes).to(device)
 
     # del edge_index, edge_weight, y
@@ -145,14 +150,15 @@ def main(device, parent, file):
 
     train_idx = [i - vocab_size for i in train_idx]
     val_idx = [i - vocab_size for i in val_idx]
+    test_idx = [i - vocab_size for i in test_idx]
 
     args = {
         'device': device,
         'num_layers': 2,
-        'hidden_dim': 256,
+        'hidden_dim': 32,
         'dropout': 0.5,
         'lr': 0.01,
-        'epochs': 100,
+        'epochs': 1000,
     }
 
     # input_dim, hidden_dim, output_dim, num_layers,
@@ -161,10 +167,6 @@ def main(device, parent, file):
                 data.num_classes, args['num_layers'],
                 args['dropout'], return_embeds=True).to(device)
 
-    # evaluator = Evaluator(name='ogbn-arxiv')
-
-    # train_idx = split_idx['train']
-    #
     # reset the parameters to initial random value
     model.reset_parameters()
     # torch.optim.sparse_adam
@@ -178,16 +180,42 @@ def main(device, parent, file):
     for epoch in range(1, 1 + args["epochs"]):
         loss = train(model, data, train_idx, optimizer, loss_fn)
 
-        result = test(model, data, train_idx, val_idx)
-        train_acc, valid_acc = result
+        result = test(model, data, train_idx, val_idx, test_idx)
+        train_acc, valid_acc, test_acc = result
         if valid_acc > best_valid_acc:
             best_valid_acc = valid_acc
-            with open(os.path.join(parent, file + "_model"), 'wb') as f:
+            with open(os.path.join(parent, file + '_' + str(args['hidden_dim']) + "_model"), 'wb') as f:
                 pickle.dump(model, f)
-        print(f'Epoch: {epoch:02d}, '
+        logging.info(f'Epoch: {epoch:02d}, '
               f'Loss: {loss:.4f}, '
               f'Train: {100 * train_acc:.2f}%, '
-              f'Valid: {100 * valid_acc:.2f}% ')
+              f'Valid: {100 * valid_acc:.2f}% '
+              f'Test: {100 * test_acc:.2f}% ')
+
+
+
+
+def load_train_val_test_idx(file, document_idx, train_val_ratio = 0.8):
+    """ load the train, validation and test index from the heterogenous adj matrix
+    :param file: the dataset
+    :param document_idx: the index in the heterogenous adj matrix
+    :param train_val_ratio: split ratio between train and validaton
+    :return: (train index, val index, test index)
+    """
+    document_idx = random.sample(document_idx,
+                                 len(document_idx))  # for personal dataset we first shuffle the document
+    if file == "20ng":
+        train_val_size = get_20ng_train_size() # the 20news group dataset by default split the train and test based on the date of the text, as this split is used in the leaderbord
+    else:
+        train_val_size = int(len(document_idx) * 0.9) # and simply use 90% of data for train and val
+
+    train_val = document_idx[:train_val_size]
+    train_val_idx = random.sample(train_val, len(train_val)) # then shuffle the train val set
+    train_size = int(len(train_val_idx) * train_val_ratio)
+    train_idx = train_val_idx[: train_size]
+    val_idx = train_val_idx[train_size:]
+    test_idx = document_idx[train_val_size:]
+    return train_idx, val_idx, test_idx
 
 
 if __name__ == "__main__":

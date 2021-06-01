@@ -5,9 +5,10 @@ data/*
 */data/*
 *params
 deprecated
-test.py
+node2vec_training.py
 test2.py
 plot
 *.param
 *.pickle
 log
+model_trained

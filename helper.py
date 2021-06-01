@@ -38,7 +38,7 @@ def visualize_emb(emb, G):
 
 if __name__ == "__main__":
     G = karate_club_graph()
-    p = os.path.join(os.path.dirname(__file__), "karate/data/karate.emd")
+    p = os.path.join(os.path.dirname(__file__), "data/karate/data/karate.emd")
     index_arr = []
     emb_arr = []
     with open(p, 'r') as f:

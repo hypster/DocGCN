@@ -5,6 +5,7 @@ import numpy as np
 import pickle
 import os
 from collections import defaultdict
+from dataLoader import load_20ng, load_Ned_company
 import argparse
 
 
@@ -88,30 +89,6 @@ def build_hetereogenous_graph(tf_idf, pmi_matrix):
     return adj
 
 
-def load_20ng(category, **kargs):
-    if category == ['all']:
-        category = None
-    data_20ng = fetch_20newsgroups(subset='all', categories=category)
-    doc_list = data_20ng.data
-    y = data_20ng.target
-    return doc_list, y
-
-
-def load_Ned_company():
-    with open(os.path.join(parent, "ned_company", "data"), 'rb') as f:
-        data = pickle.load(f)
-
-    x,labels = list(zip(*data))
-    set_label = set(label for label in labels)
-    label2target = {label: i for i, label in enumerate(set_label)}
-    with open(os.path.join(parent, "ned_company", "label2target"), 'wb') as f:
-        pickle.dump(label2target, f)
-    y = []
-    for label in labels:
-        y.append(label2target[label])
-    return x,y
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--file', required=True)
@@ -125,13 +102,14 @@ if __name__ == "__main__":
     if file == "20ng":
         doc_list, y = load_20ng(**args)
     elif file == 'ned_company':
-        doc_list, y = load_Ned_company()
+        doc_list, y = load_Ned_company(parent)
     else:
         print("corpus not recognized")
         exit()
 
     with open(os.path.join(data_dir, "y"), 'wb') as f:
         pickle.dump(y, f)
+
 
     # create tfidf doc-word matrix
     vectorizer = TfidfVectorizer(max_df=0.8, min_df=5, stop_words="english")
@@ -172,10 +150,12 @@ if __name__ == "__main__":
     total_word_count = sum(len(doc) for doc in indexed_tokens_list)
     print(f"total number of tokens in corpus: {total_word_count}")
 
+    # build pmi matrix
     pmi_matrix = build_pmi_matrix(word_list, cooccur_map, token_freq_map, total_word_count)
     with open(os.path.join(data_dir, "pmi"), "wb") as f:
         pickle.dump(pmi_matrix, f)
 
+    # build hetereogenous graph
     adj = build_hetereogenous_graph(tf_idf, pmi_matrix)
     with open(os.path.join(data_dir, 'adj'), 'wb') as f:
         pickle.dump(adj, f)
