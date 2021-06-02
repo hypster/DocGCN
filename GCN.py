@@ -1,5 +1,7 @@
 import argparse
 import logging
+from time import time
+
 import torch
 import torch.nn.functional as F
 
@@ -16,8 +18,12 @@ from scipy.sparse import identity
 # only set if your env is gpu
 # torch.backends.cudnn.benchmark = True
 # torch.backends.cudnn.enabled = True
+from helper import check_valid_filename
+from sklearn.metrics import f1_score
 
 logging.basicConfig(filename='log_tmp', filemode='w', level=logging.INFO, format='%(message)s')
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 class GCN(torch.nn.Module):
@@ -27,10 +33,12 @@ class GCN(torch.nn.Module):
         super(GCN, self).__init__()
 
         # A list of GCNConv layers
-        self.convs = ModuleList([GCNConv(input_dim, hidden_dim)] + [GCNConv(hidden_dim, hidden_dim) for _ in range(num_layers-2)] + [GCNConv(hidden_dim, output_dim)])
+        self.convs = ModuleList(
+            [GCNConv(input_dim, hidden_dim)] + [GCNConv(hidden_dim, hidden_dim) for _ in range(num_layers - 2)] + [
+                GCNConv(hidden_dim, output_dim)])
 
         # A list of 1D batch normalization layers
-        self.bns = ModuleList([BatchNorm1d(hidden_dim) for _ in range(num_layers-1)])
+        self.bns = ModuleList([BatchNorm1d(hidden_dim) for _ in range(num_layers - 1)])
 
         # The log softmax layer
         self.softmax = LogSoftmax(1)
@@ -47,9 +55,9 @@ class GCN(torch.nn.Module):
         for bn in self.bns:
             bn.reset_parameters()
 
-    def forward(self, x, adj_t, edge_weight = None):
+    def forward(self, x, adj_t, edge_weight=None):
         for i in range(len(self.convs)):
-            if i == len(self.convs)-1:
+            if i == len(self.convs) - 1:
                 x = self.convs[i](x, adj_t, edge_weight)
                 if not self.return_embeds:
                     x = self.softmax(x)
@@ -71,146 +79,88 @@ def accuracy(pred, labels):
     corr = sum(pred.argmax(dim=-1) == labels)
     return corr.item() / labels.shape[0]
 
+
 def train(model, data, train_idx, optimizer, loss_fn):
     model.train()
     optimizer.zero_grad()
     y_hat = model(data.x, data.edge_index, data.edge_weight)
-    loss = loss_fn(y_hat[data.train_idx], data.y[train_idx]) # reshape(-1) to make target 1d vector
+    loss = loss_fn(y_hat[data.train_idx], data.y[train_idx])
     loss.backward()
     optimizer.step()
     l = loss.item()
-    loss = None
     return l
 
 
-# Test function here
 @torch.no_grad()
 def test(model, data, train_idx, val_idx, test_idx):
-    """this function tests the model by
-    using the given split_idx and evaluator.
-    :param model:
-    :param data:
-    :param train_idx: the index from the document data, not to be confused with data.train_idx which stores the index based on the adjacency matrix
-    :param evaluator:
-    :return:
-    """
-    model.eval() # calling eval to pause dropout
+    model.eval()  # calling eval to pause training behavior
     pred = model(data.x, data.edge_index, data.edge_weight)
     # pred = F.log_softmax(out, 1)
     train_acc = accuracy(pred[data.train_idx], data.y[train_idx])
     valid_acc = accuracy(pred[data.val_idx], data.y[val_idx])
     test_acc = accuracy(pred[data.test_idx], data.y[test_idx])
-    return train_acc, valid_acc, test_acc
+    yhat = np.argmax(pred[data.test_idx].detach().cpu().numpy(), axis=-1)
+    y = data.y[test_idx].detach().cpu().numpy()
+    f_score = f1_score(y, yhat, average='micro')
+    return train_acc, valid_acc, test_acc, f_score
 
 
-def main(device, parent, file):
-    edge_index, edge_weight = load_edge_index_weight(file)
-    edge_index = torch.LongTensor(edge_index)
-    edge_weight = torch.FloatTensor(edge_weight)
-    y = load_labels(file)
-    vocab_size = len(load_word_list(file))
-    print("pmi sub matrix size: (%d, %d)" % (vocab_size, vocab_size))
-    n = len(y) + vocab_size
-    print("adjacency matrix size: (%d, %d)" % (n, n))
-
-
-    document_idx = [i for i in range(vocab_size,
-                                     n)]  # document index in the adjacency matrix, the start and end index of the bottom right sub matrix
-
-
-
-    train_idx, val_idx, test_idx = load_train_val_test_idx(file, document_idx)
-
-    # total_idx = random.sample(document_idx, len(document_idx))
-    # train_val_ratio = 0.8
-    # train_size = int(len(total_idx) * train_val_ratio)
-    # train_idx = total_idx[: train_size]
-    # val_idx = total_idx[train_size:]
-
-    # x = torch.ones(size=(len(adj), 20))
-    # x = F.one_hot(torch.arange(n))  # one-hot encoding
-    x = identity(n, format='coo')
-    i = np.vstack([x.row, x.col])
-    v = x.data
-    x = torch.sparse_coo_tensor(i, v, x.shape, dtype=torch.float)
-
-    num_classes = max(y) + 1
-    y = torch.LongTensor(y)
-
-    print("num of classes: %d" % num_classes)
-    data = Data(x=x, edge_index=edge_index, edge_weight=edge_weight, train_idx=train_idx, val_idx=val_idx, test_idx = test_idx, y=y,
-                num_classes=num_classes).to(device)
-
-    # del edge_index, edge_weight, y
-
-    # Make the adjacency matrix to symmetric
-
-    # split_idx = dataset.get_idx_split()
-    # train_idx = split_idx['train'].to(device)
-
-    train_idx = [i - vocab_size for i in train_idx]
-    val_idx = [i - vocab_size for i in val_idx]
-    test_idx = [i - vocab_size for i in test_idx]
-
-    args = {
-        'device': device,
-        'num_layers': 2,
-        'hidden_dim': 32,
-        'dropout': 0.5,
-        'lr': 0.01,
-        'epochs': 1000,
-    }
-
-    # input_dim, hidden_dim, output_dim, num_layers,
-    # dropout, return_embeds = False
-    model = GCN(data.num_features, args['hidden_dim'],
-                data.num_classes, args['num_layers'],
-                args['dropout'], return_embeds=True).to(device)
-
-    # reset the parameters to initial random value
-    model.reset_parameters()
-    # torch.optim.sparse_adam
-    # optimizer = torch.optim.SparseAdam(model.parameters(), lr=args['lr'])
-    optimizer = torch.optim.Adam(model.parameters(), lr=args['lr'])
-    loss_fn = torch.nn.CrossEntropyLoss()
-    # loss_fn = F.nll_loss()
-
+def learn(model, data, train_idx, optimizer, loss_fn, epochs = 1000):
     best_valid_acc = 0
-
-    for epoch in range(1, 1 + args["epochs"]):
+    start = time()
+    for epoch in range(1, 1 + epochs):
         loss = train(model, data, train_idx, optimizer, loss_fn)
-
         result = test(model, data, train_idx, val_idx, test_idx)
-        train_acc, valid_acc, test_acc = result
+        train_acc, valid_acc, test_acc, f_score = result
         if valid_acc > best_valid_acc:
             best_valid_acc = valid_acc
-            with open(os.path.join(parent, file + '_' + str(args['hidden_dim']) + "_model"), 'wb') as f:
-                pickle.dump(model, f)
+            torch.save(model.state_dict(), model.name + ".pt")
+            with open(os.path.join(model_dir, model.name+".pt"), 'wb') as f:
+                torch.save(model.state_dict(), f)
         logging.info(f'Epoch: {epoch:02d}, '
-              f'Loss: {loss:.4f}, '
-              f'Train: {100 * train_acc:.2f}%, '
-              f'Valid: {100 * valid_acc:.2f}% '
-              f'Test: {100 * test_acc:.2f}% ')
+                     f'Loss: {loss:.4f}, '
+                     f'Train: {100 * train_acc:.2f}%, '
+                     f'Valid: {100 * valid_acc:.2f}%, '
+                     f'Test: {100 * test_acc:.2f}%, ',
+                     f'F1(Micro): {f_score:.2f}')
+    total = time() - start
+    print(f"total training time: {total}, "
+          f"average time per epoch: {total / epochs:.2f}")
+
+def parseArgument():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--file', required=True)
+    parser.add_argument('--num_layers', type=int, default=2)
+    parser.add_argument('--hidden_dim', type=int, default=32)
+    parser.add_argument('--dropout', type=float, default=0.5)
+    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--epochs', type=int, default=1000)
+    args = parser.parse_args()
+    args = vars(args)
+    return args
 
 
-
-
-def load_train_val_test_idx(file, document_idx, train_val_ratio = 0.8):
+def generate_train_val_test_idx(start, end, file, train_val_ratio=0.8, train_test_split_ratio=0.8):
     """ load the train, validation and test index from the heterogenous adj matrix
     :param file: the dataset
-    :param document_idx: the index in the heterogenous adj matrix
-    :param train_val_ratio: split ratio between train and validaton
+    :param start: start position of the document node in the matrix
+    :param end: end position of the document node in the matrix
+    :param train_val_ratio: split ratio between train and validation
     :return: (train index, val index, test index)
     """
-    document_idx = random.sample(document_idx,
-                                 len(document_idx))  # for personal dataset we first shuffle the document
-    if file == "20ng":
-        train_val_size = get_20ng_train_size() # the 20news group dataset by default split the train and test based on the date of the text, as this split is used in the leaderbord
-    else:
-        train_val_size = int(len(document_idx) * 0.9) # and simply use 90% of data for train and val
+    document_idx = [i for i in range(start,
+                                     end)]  # range of document nodes in the matrix
 
-    train_val = document_idx[:train_val_size]
-    train_val_idx = random.sample(train_val, len(train_val)) # then shuffle the train val set
+    if file == "20ng":
+        train_val_size = get_20ng_train_size()
+        train_val_idx = document_idx[:train_val_size]
+        train_val_idx = random.sample(train_val_idx, len(train_val_idx))
+    else:  # for other dataset we first permute the document index
+        document_idx = random.sample(document_idx,
+                                     len(document_idx))
+        train_val_size = int(len(document_idx) * train_test_split_ratio)
+        train_val_idx = document_idx[:train_val_size]
+
     train_size = int(len(train_val_idx) * train_val_ratio)
     train_idx = train_val_idx[: train_size]
     val_idx = train_val_idx[train_size:]
@@ -218,19 +168,63 @@ def load_train_val_test_idx(file, document_idx, train_val_ratio = 0.8):
     return train_idx, val_idx, test_idx
 
 
+def generate_one_hot_feature(n):
+    """ generate torch one hot sparse matrix
+    :param n: the size of the matrix
+    :return: torch one hot sparse matrix
+    """
+    x = identity(n, format='coo')
+    i = np.vstack([x.row, x.col])
+    v = x.data
+    x = torch.sparse_coo_tensor(i, v, x.shape, dtype=torch.float)
+    return x
+
 if __name__ == "__main__":
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print('Device: {}'.format(device))
-    parent = os.path.join(os.path.dirname(__file__), "model_trained")
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--file', required=True)
-    args = parser.parse_args()
-    args = vars(args)
+    parent = os.path.dirname(__file__)
+    args = parseArgument()
     file = args['file']
-    if file not in ('20ng', 'ned_company'):
-        print("file is not recognized")
-        exit()
+    check_valid_filename(file)
+    model_dir = os.path.join(parent, "model_trained", file)
 
-    main(device, parent, file)
+    edge_index, edge_weight = load_edge_index_weight(file)
+    y = load_labels(file)
+    y = torch.LongTensor(y)
+    num_class = 1 + y.max().item()
+    print("num of classes: %d" % num_class)
+
+    vocab_size = len(load_word_list(file))
+    n = len(y) + vocab_size
+    print("adjacency matrix size: (%d, %d)" % (n, n))
+
+    train_idx, val_idx, test_idx = generate_train_val_test_idx(vocab_size, n, file) # l
+
+    x = generate_one_hot_feature(n)
+
+    data = Data(x=x, edge_index=edge_index, edge_weight=edge_weight, train_idx=train_idx, val_idx=val_idx,
+                test_idx=test_idx, y=y,
+                num_classes=num_class).to(device)
+
+    # decrease by vocab size to get the correct index from label vector y
+    train_idx = [i - vocab_size for i in train_idx]
+    val_idx = [i - vocab_size for i in val_idx]
+    test_idx = [i - vocab_size for i in test_idx]
+
+    model = GCN(data.num_features, args['hidden_dim'],
+                data.num_classes, args['num_layers'],
+                args['dropout'], return_embeds=True).to(device)
+
+    model_name = f"gcn_h{args['hidden_dim']}_l{args['num_layers']}_d{args['dropout']}"
+    model.name = model_name
+
+    model.reset_parameters()
+    # optimizer = torch.optim.SparseAdam(model.parameters(), lr=args['lr'])
+    optimizer = torch.optim.Adam(model.parameters(), lr=args['lr'])
+
+    loss_fn = torch.nn.CrossEntropyLoss()
+    # loss_fn = F.nll_loss()
+
+    learn(model, data, train_idx, optimizer, loss_fn, epochs=args['epochs'])
 
 
+    # learn(model_dir, file)

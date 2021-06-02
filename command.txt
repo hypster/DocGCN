@@ -1,0 +1,7 @@
+python buildCorpusGraph.py --file 20ng --window 20 --max_df 0.8 --min_df 5 --cutoff 0
+
+python buildDocumentGraph.py --file 20ng --file 20ng --window 20 --cutoff 0
+
+python GCN.py --file 20ng --num_layers 2 --hidden_dim 32 --dropout 0.5 --lr 0.01 --epochs 1000
+
+python GCNP.py --file 20ng --num_layers 2 --hidden_dim 256 --dropout 0.5 --lr 0.001 --epochs 30 --batch_size 32 --train_val_ratio 0.8

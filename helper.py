@@ -4,6 +4,10 @@ import torch
 from networkx import karate_club_graph
 import os
 
+def check_valid_filename(file):
+    if file not in ("20ng", "ned_company"):
+        print("not supported dataset")
+        exit()
 
 
 def visualize_emb(emb, G):
