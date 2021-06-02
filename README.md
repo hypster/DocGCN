@@ -1,20 +1,20 @@
 # Work for the thesis
 Example how to use:
 
-####To build corpus level graph:
+#### To build corpus level graph:
 
 run with default setting: `python buildAdj.py --file 20ng`
 
 run custom setting: `python buildCorpusGraph.py --file 20ng --window 20 --max_df 0.8 --min_df 5 --cutoff 0
 
-####To build document level graph:
+#### To build document level graph:
 
 run with default setting: `python buildDocumentGraph.py --file 20ng`
 
 run with custom setting: `python buildDocumentGraph.py --file 20ng --file 20ng --window 20 --cutoff 0
 `
 
-####train TextGCN: 
+#### train TextGCN: 
 
 run with default setting: `python GCN.py --file 20ng`
 
