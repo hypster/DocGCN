@@ -21,7 +21,7 @@ from scipy.sparse import identity
 from helper import check_valid_filename
 from sklearn.metrics import f1_score
 
-logging.basicConfig(filename='log_tmp', filemode='w', level=logging.INFO, format='%(message)s')
+logging.basicConfig(filename='train_log/gcn_h64_l2_d0.5_l0.01', filemode='w', level=logging.INFO, format='%(message)s')
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -121,7 +121,7 @@ def learn(model, data, train_idx, optimizer, loss_fn, epochs = 1000):
                      f'Loss: {loss:.4f}, '
                      f'Train: {100 * train_acc:.2f}%, '
                      f'Valid: {100 * valid_acc:.2f}%, '
-                     f'Test: {100 * test_acc:.2f}%, ',
+                     f'Test: {100 * test_acc:.2f}%, '
                      f'F1(Micro): {f_score:.2f}')
     total = time() - start
     print(f"total training time: {total}, "

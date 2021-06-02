@@ -1,37 +1,41 @@
+import os
+import re
 import seaborn as sns
 import matplotlib.pyplot as plt
-def extract_log(file="log/graph_20ng_256_5"):
+reg = re.compile('[\d]*[.][\d]+')
+def extract_log(file):
     loss = []
     train_acc = []
     val_acc = []
     test_acc = []
+    f1_score = []
+    arr = []
     with open(file, "r") as f:
-        for l in f:
-            i = l.index("Loss")
-            if i != -1:
-                i += 5
-                loss.append(float(l[i:i+7]))
-            i = l.index("Train")
-            if i != -1:
-                i += 6
-                train_acc.append(float(l[i:i+6]))
-            i = l.index("Valid")
-            if i != -1:
-                i += 6
-                val_acc.append(float(l[i:i+6]))
-            i = l.index("Test")
-            if i != -1:
-                i += 5
-                test_acc.append(float(l[i:i + 6]))
+        lines = f.readlines()
+        for l in lines[:-1]:
+            temp = []
+            for i, obj in enumerate(reg.finditer(l)):
+                temp.append(float(obj[0]))
 
-    return {'loss': loss, 'train acc': train_acc, 'val acc': val_acc, 'test acc': test_acc}
+            arr.append(temp)
+
+    loss, train_acc, val_acc, test_acc, f1_score = list(zip(*arr))
+
+
+    return {'loss': loss, 'train acc': train_acc, 'val acc': val_acc, 'test acc': test_acc, 'f1 score': f1_score}
 
 def plot(performance):
     loss = performance['loss']
     if len(loss):
-        sns.lineplot(loss)
+        plt.plot(loss)
         plt.show()
 
 if __name__ == "__main__":
-    performance = extract_log()
-    plot(performance)
+    log_map = {}
+    parent = "train_log/gcnp/"
+    for f in os.listdir(parent):
+        print(f)
+        log_map[f] = extract_log(os.path.join(parent, f))
+
+    print(log_map)
+    # plot(performance)

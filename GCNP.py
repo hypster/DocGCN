@@ -80,8 +80,8 @@ def eval(model, loader, compute_f1 = False):
         corr += torch.sum(yhat_batch == batch.y.view(-1)).item()
         total += len(pred)
         if compute_f1:
-            yhat = np.concatenate([yhat, yhat_batch.detach().cpu().numpy()])
-            y = np.concatenate([y, batch.y.detach().cpu().numpy()])
+            yhat = np.concatenate([yhat, yhat_batch.detach().cpu().numpy().reshape(-1)])
+            y = np.concatenate([y, batch.y.detach().cpu().numpy().reshape(-1)])
 
     if compute_f1:
         f_score = f1_score(y, yhat, average='micro')
@@ -111,13 +111,13 @@ def learn(model, optimizer, loss_fn, train_loader, valid_loader, test_loader, ep
     start = time()
     for epoch in range(1, 1 + epochs):
         loss = train(model, train_loader, optimizer, loss_fn)
-        train_acc, train_f1, _ = eval(model, train_loader)
-        valid_acc, valid_f1, _ = eval(model, valid_loader)
-        test_acc, test_f1, f_score = eval(model, test_loader, compute_f1 = True)
+        train_acc, _ = eval(model, train_loader)
+        valid_acc, _ = eval(model, valid_loader)
+        test_acc, f_score = eval(model, test_loader, compute_f1 = True)
 
         if valid_acc > best_valid_acc:
             best_valid_acc = valid_acc
-            with open(os.path.join(model_dir, model.name + ".pt"), 'rb') as f:
+            with open(model.name + ".pt", 'wb') as f:
                 torch.save(model.state_dict(), f)
 
         print(f'Epoch: {epoch:02d}, '
@@ -181,7 +181,7 @@ if __name__ == "__main__":
                  num_class, args['num_layers'],
                  args['dropout']).to(device)
 
-    model_name = f"gcnp_h{args['hidden_dim']}_l{args['num_layers']}_d{args['dropout']}"
+    model_name = f"gcnp_h{args['hidden_dim']}_l{args['num_layers']}_d{args['dropout']}_l{args['lr']}_b{args['batch_size']}"
     model.name = model_name
     model.reset_parameters()
 

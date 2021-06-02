@@ -2,6 +2,49 @@ python buildCorpusGraph.py --file 20ng --window 20 --max_df 0.8 --min_df 5 --cut
 
 python buildDocumentGraph.py --file 20ng --file 20ng --window 20 --cutoff 0
 
-python GCN.py --file 20ng --num_layers 2 --hidden_dim 32 --dropout 0.5 --lr 0.01 --epochs 1000
+python GCN.py --file 20ng --num_layers 2 --hidden_dim 64 --dropout 0.5 --lr 0.02 --epochs 1000
 
-python GCNP.py --file 20ng --num_layers 2 --hidden_dim 256 --dropout 0.5 --lr 0.001 --epochs 30 --batch_size 32 --train_val_ratio 0.8
+python GCNP.py --file 20ng --num_layers 2 --hidden_dim 32 --dropout 0.5 --lr 0.001 --epochs 10 --batch_size 1024 --train_val_ratio 0.8
+
+
+
+Traceback (most recent call last):
+  File "GCNP.py", line 193, in <module>
+    learn(model, optimizer, loss_fn, train_loader, valid_loader, test_loader, epochs=args["epochs"])
+  File "GCNP.py", line 120, in learn
+    with open(os.path.join(model_dir, model.name + ".pt"), 'rb') as f:
+FileNotFoundError: [Errno 2] No such file or directory: 'model_trained/20ng/gcnp_h256_l2_d0.5_.pt'
+
+
+
+Traceback (most recent call last):
+  File "GCNP.py", line 193, in <module>
+    learn(model, optimizer, loss_fn, train_loader, valid_loader, test_loader, epochs=args["epochs"])
+  File "GCNP.py", line 116, in learn
+    test_acc, f_score = eval(model, test_loader, compute_f1 = True)
+  File "/usr/local/lib/python3.8/dist-packages/torch/autograd/grad_mode.py", line 27, in decorate_context
+    return func(*args, **kwargs)
+  File "GCNP.py", line 84, in eval
+    y = np.concatenate([y, batch.y.detach().cpu().numpy()])
+  File "<__array_function__ internals>", line 5, in concatenate
+ValueError: all the input arrays must have same number of dimensions, but the array at index 0 has 1 dimension(s) and the array at index 1 has 2 dimension(s)
+
+
+--- Logging error ---
+Traceback (most recent call last):
+  File "/usr/lib/python3.8/logging/__init__.py", line 1085, in emit
+    msg = self.format(record)
+  File "/usr/lib/python3.8/logging/__init__.py", line 929, in format
+    return fmt.format(record)
+  File "/usr/lib/python3.8/logging/__init__.py", line 668, in format
+    record.message = record.getMessage()
+  File "/usr/lib/python3.8/logging/__init__.py", line 373, in getMessage
+    msg = msg % self.args
+ValueError: unsupported format character ',' (0x2c) at index 38
+Call stack:
+  File "GCN.py", line 227, in <module>
+    learn(model, data, train_idx, optimizer, loss_fn, epochs=args['epochs'])
+  File "GCN.py", line 120, in learn
+    logging.info(f'Epoch: {epoch:02d}, '
+Message: 'Epoch: 01, Loss: 2.9964, Train: 12.35%, Valid: 11.67%, Test: 10.66%, '
+Arguments: ('F1(Micro): 0.11',)

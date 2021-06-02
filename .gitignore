@@ -12,3 +12,5 @@ plot
 *.pickle
 log
 model_trained
+train_log
+*.zip
