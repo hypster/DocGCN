@@ -11,7 +11,7 @@ run custom setting: `python buildCorpusGraph.py --file 20ng --window 20 --max_df
 
 run with default setting: `python buildDocumentGraph.py --file 20ng`
 
-run with custom setting: `python buildDocumentGraph.py --file 20ng --file 20ng --window 20 --cutoff 0
+run with custom setting: `python buildDocumentGraph.py --file 20ng  --window 20 --cutoff 0
 `
 
 #### train TextGCN: 

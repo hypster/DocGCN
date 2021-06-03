@@ -117,7 +117,7 @@ def learn(model, optimizer, loss_fn, train_loader, valid_loader, test_loader, ep
 
         if valid_acc > best_valid_acc:
             best_valid_acc = valid_acc
-            with open(model.name + ".pt", 'wb') as f:
+            with open(os.path.join(model_dir, model.name + ".pt"), 'wb') as f:
                 torch.save(model.state_dict(), f)
 
         print(f'Epoch: {epoch:02d}, '
@@ -132,11 +132,11 @@ def learn(model, optimizer, loss_fn, train_loader, valid_loader, test_loader, ep
 
 
 def load_train_val_test_data(dataset, file):
-    if file == "20ng":
-        train_val_size = get_20ng_train_size()
-    else:
+    if file == "ned_company":
         train_val_size = int(0.8 * len(
-            dataset))  # for other dataset where there is no fixed train test split, use 0.8 of total data size for train val set
+            dataset))  # for custom dataset where there is no fixed train test split, use 0.8 of total data size for train val set
+    else:
+        train_val_size = get_train_size(file)
 
     train_val = dataset[:train_val_size]
     train_val.shuffle()  # shuffle the train validation set first

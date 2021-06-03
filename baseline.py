@@ -30,12 +30,12 @@ y_train = news_train.target
 x_test = vectorizer.transform(news_test.data)
 y_test = news_test.target
 
-x = sp.vstack([x_train, x_test])
-y = np.hstack([y_train, y_test])
-plot_points(x,y)
+# x = sp.vstack([x_train, x_test])
+# y = np.hstack([y_train, y_test])
+# plot_points(x,y)
 
 lr = LogisticRegression(solver='lbfgs')
 lr.fit(x_train, y_train)
 acc = lr.score(x_test, y_test)
 print("acc: %.4f" % acc)
-plot_points(x_test, y_test)
+# plot_points(x_test, y_test)

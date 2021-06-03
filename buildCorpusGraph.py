@@ -4,7 +4,7 @@ import numpy as np
 import pickle
 import os
 from collections import defaultdict
-from dataLoader import load_20ng, load_Ned_company
+from dataLoader import load_20ng, load_Ned_company, load_r8
 import argparse
 
 from helper import check_valid_filename
@@ -40,6 +40,7 @@ def build_cooccur_map(indexed_tokens_list, window_size=20):
 
 
 def build_tf_idf(doc_list, max_df=0.8, min_df=0.5):
+    # TODO: here I use all data to calculate tf-idf, usually you only use training data, but I saw others are also doing like this, so I will remain as it is
     """create tfidf doc-word matrix
     :param doc_list: list of document
     :param max_df: max document frequency to filter for
@@ -84,7 +85,7 @@ def build_hetereogenous_graph(tf_idf, pmi_matrix):
     top-left: PMI
     top-right: tf_idf_transpose
     bottom_left: tf_idf
-    bottom_right: zero matrix, we don't have edge between document in contrast to citation network
+    bottom_right: zero matrix, we don't have edge between document
         """
 
     tf_idf_T = tf_idf.transpose()
@@ -156,6 +157,9 @@ def load_doc_label(file):
         return load_20ng(**args)
     elif file == 'ned_company':
         return load_Ned_company(parent)
+    elif file == 'r8':
+        return load_r8(data_dir)
+
 
 
 if __name__ == "__main__":
@@ -165,7 +169,12 @@ if __name__ == "__main__":
     file = args['file']
     data_dir = os.path.join(parent, file)
 
-    doc_list, y = load_doc_label(file)
+    obj = load_doc_label(file)
+    doc_list = obj['doc_list']
+    y = obj['y']
+    meta = None
+    if 'meta' in obj:
+        meta = obj['meta']
 
     tf_idf, vectorizer = build_tf_idf(doc_list, max_df=args['max_df'], min_df=args['min_df']) # create tfidf doc-word matrix
     print(f"tf idf shape: {tf_idf.shape}")
@@ -200,3 +209,7 @@ if __name__ == "__main__":
     #     pickle.dump(pmi_matrix, f)
     with open(os.path.join(data_dir, 'adj'), 'wb') as f:
         pickle.dump(adj, f)
+
+    if meta:
+        with open(os.path.join(data_dir, 'meta'), 'wb') as f:
+            pickle.dump(meta, f)

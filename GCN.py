@@ -21,8 +21,6 @@ from scipy.sparse import identity
 from helper import check_valid_filename
 from sklearn.metrics import f1_score
 
-logging.basicConfig(filename='train_log/gcn_h64_l2_d0.5_l0.01', filemode='w', level=logging.INFO, format='%(message)s')
-
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
@@ -105,7 +103,7 @@ def test(model, data, train_idx, val_idx, test_idx):
     return train_acc, valid_acc, test_acc, f_score
 
 
-def learn(model, data, train_idx, optimizer, loss_fn, epochs = 1000):
+def learn(model, data, train_idx, val_idx, test_idx, optimizer, loss_fn, epochs = 1000):
     best_valid_acc = 0
     start = time()
     for epoch in range(1, 1 + epochs):
@@ -117,7 +115,7 @@ def learn(model, data, train_idx, optimizer, loss_fn, epochs = 1000):
             torch.save(model.state_dict(), model.name + ".pt")
             with open(os.path.join(model_dir, model.name+".pt"), 'wb') as f:
                 torch.save(model.state_dict(), f)
-        logging.info(f'Epoch: {epoch:02d}, '
+        print(f'Epoch: {epoch:02d}, '
                      f'Loss: {loss:.4f}, '
                      f'Train: {100 * train_acc:.2f}%, '
                      f'Valid: {100 * valid_acc:.2f}%, '
@@ -140,7 +138,7 @@ def parseArgument():
     return args
 
 
-def generate_train_val_test_idx(start, end, file, train_val_ratio=0.8, train_test_split_ratio=0.8):
+def generate_train_val_test_idx(start, end, file, train_val_ratio=0.9, train_test_split_ratio=0.8):
     """ load the train, validation and test index from the heterogenous adj matrix
     :param file: the dataset
     :param start: start position of the document node in the matrix
@@ -149,17 +147,18 @@ def generate_train_val_test_idx(start, end, file, train_val_ratio=0.8, train_tes
     :return: (train index, val index, test index)
     """
     document_idx = [i for i in range(start,
-                                     end)]  # range of document nodes in the matrix
+                                     end)]  # range of document nodes in the matrix, note: though train and test has been permutated each, test set follows the train set in the matrix
 
-    if file == "20ng":
-        train_val_size = get_20ng_train_size()
-        train_val_idx = document_idx[:train_val_size]
-        train_val_idx = random.sample(train_val_idx, len(train_val_idx))
-    else:  # for other dataset we first permute the document index
+    if file == "ned_company":  # for company dataset there is no train test split, we first permute the document index
         document_idx = random.sample(document_idx,
                                      len(document_idx))
         train_val_size = int(len(document_idx) * train_test_split_ratio)
         train_val_idx = document_idx[:train_val_size]
+    else:
+        train_val_size = get_train_size(file) # get the natural train test split size
+        train_val_idx = document_idx[:train_val_size]
+        train_val_idx = random.sample(train_val_idx, len(train_val_idx)) # to make sure the train val set is indeed shuffled, we shuffle again the train val index
+
 
     train_size = int(len(train_val_idx) * train_val_ratio)
     train_idx = train_val_idx[: train_size]
@@ -184,6 +183,7 @@ if __name__ == "__main__":
     parent = os.path.dirname(__file__)
     args = parseArgument()
     file = args['file']
+
     check_valid_filename(file)
     model_dir = os.path.join(parent, "model_trained", file)
 
@@ -216,6 +216,7 @@ if __name__ == "__main__":
 
     model_name = f"gcn_h{args['hidden_dim']}_l{args['num_layers']}_d{args['dropout']}"
     model.name = model_name
+    logging.basicConfig(filename=model_name, filemode='w', level=logging.INFO, format='%(message)s')
 
     model.reset_parameters()
     # optimizer = torch.optim.SparseAdam(model.parameters(), lr=args['lr'])
@@ -224,7 +225,7 @@ if __name__ == "__main__":
     loss_fn = torch.nn.CrossEntropyLoss()
     # loss_fn = F.nll_loss()
 
-    learn(model, data, train_idx, optimizer, loss_fn, epochs=args['epochs'])
+    learn(model, data, train_idx, val_idx, test_idx, optimizer, loss_fn, epochs=args['epochs'])
 
 
     # learn(model_dir, file)

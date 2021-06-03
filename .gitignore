@@ -10,8 +10,10 @@ test2.py
 plot
 *.param
 *.pickle
-log
+deprecated/log
 model_trained
 train_log
 *.zip
 command.txt
+*.pt
+log_temp
