@@ -106,7 +106,7 @@ class MyOwnDataset(InMemoryDataset):
 def parseArgument():
     parser = argparse.ArgumentParser()
     parser.add_argument('--file', required=True)
-    parser.add_argument('--window', type=int, default=20)
+    parser.add_argument('--window', type=int, default=5)
     parser.add_argument('--cutoff', type=float, default=0)
     args = parser.parse_args()
     args = vars(args)
@@ -126,7 +126,7 @@ if __name__ == "__main__":
 
     indexed_tokens_list = load_indexed_tokens_list(file)
 
-    y = load_labels(file)
+    y = load_y(file)
 
     word_list = load_word_list(file)
 

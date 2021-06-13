@@ -1,15 +1,14 @@
 import argparse
+from random import random
 from time import time
 
-import torch
 from sklearn.metrics import f1_score
 from torch_geometric.data import DataLoader
-from torch_geometric.nn import global_add_pool, global_mean_pool
+from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool, global_sort_pool
 from GCN import GCN
 from dataLoader import *
 from helper import check_valid_filename
 from buildDocumentGraph import MyOwnDataset
-
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # GCN to predict graph property
@@ -47,6 +46,8 @@ class GCNP(torch.nn.Module):
 
         out = self.gnn_node(x, edge_index, edge_weight)
         out = self.pool(out, batch)
+        # # new dropout layer after pool
+        # out = dropout(out, p=0.5, training=self.training)
         out = self.linear(out)
 
         return out
@@ -56,6 +57,7 @@ def train(model, data_loader, optimizer, loss_fn):
     model.train()
     loss = 0
     for step, batch in enumerate(data_loader):
+        # print(batch.batch.max()+1, batch.y.shape)
         batch = batch.to(device)
         optimizer.zero_grad()
         out = model(batch)
@@ -100,8 +102,9 @@ def parseArgument():
     parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--lr',type=float, default=0.001)
     parser.add_argument('--epochs', type=int, default=30)
-    parser.add_argument('--train_val_ratio',type=float, default=0.8)
+    parser.add_argument('--train_val_ratio',type=float, default=0.9)
     parser.add_argument('--batch_size', type=int, default=32)
+    # parser.add_argument('--pool', default='mean')
     args = parser.parse_args()
     args = vars(args)
     return args
@@ -125,24 +128,28 @@ def learn(model, optimizer, loss_fn, train_loader, valid_loader, test_loader, ep
               f'Train: {100 * train_acc:.2f}%, '
               f'Valid: {100 * valid_acc:.2f}%, '
               f'Test: {100 * test_acc:.2f}%, '
-              f'F1(Micro): {f_score:.2f}')
+              f'F1(Micro): {f_score:.4f}')
     total = time() - start
     print(f"total training time: {total}, "
           f"average time per epoch: {total / epochs:.2f}")
 
 
-def load_train_val_test_data(dataset, file):
+def load_train_val_test_data(dataset, file, train_val_ratio = 0.9):
     if file == "ned_company":
         train_val_size = int(0.8 * len(
             dataset))  # for custom dataset where there is no fixed train test split, use 0.8 of total data size for train val set
     else:
-        train_val_size = get_train_size(file)
+        train_val_size = get_train_size(file) # other dataset comes with a default split
 
     train_val = dataset[:train_val_size]
     train_val.shuffle()  # shuffle the train validation set first
-    train_val_ratio = args['train_val_ratio']
     train_size = int(train_val_size * train_val_ratio)
     data_train = train_val[:train_size]
+    # only for the experiment
+    for data in data_train:
+        if random() < 1:
+            data.y = torch.LongTensor([int(random() * 20)])
+
     data_val = train_val[train_size:]
     data_test = dataset[train_val_size:]
     return data_train, data_val, data_test
@@ -159,15 +166,16 @@ if __name__ == "__main__":
     check_valid_filename(file)
 
     data_dir = os.path.join(parent, "data", file)
+    print(data_dir)
     model_dir = os.path.join(parent, "model_trained", file)
 
     dataset = MyOwnDataset(root=data_dir)  # load the dataset
 
     vocab_size = len(load_word_list(file))
     dataset.vocab_size = vocab_size
-    data_train, data_val, data_test = load_train_val_test_data(dataset, file)
+    data_train, data_val, data_test = load_train_val_test_data(dataset, file, args['train_val_ratio'])
 
-    y = load_labels(file)
+    y = load_y(file)
     n = len(y)
     num_class = max(y) + 1
 
@@ -181,7 +189,7 @@ if __name__ == "__main__":
                  num_class, args['num_layers'],
                  args['dropout']).to(device)
 
-    model_name = f"gcnp_h{args['hidden_dim']}_l{args['num_layers']}_d{args['dropout']}_l{args['lr']}_b{args['batch_size']}"
+    model_name = f"gcnp_{file}_h{args['hidden_dim']}_l{args['num_layers']}_d{args['dropout']}_l{args['lr']}_b{args['batch_size']}"
     model.name = model_name
     model.reset_parameters()
 

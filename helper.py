@@ -5,7 +5,7 @@ from networkx import karate_club_graph
 import os
 
 def check_valid_filename(file):
-    if file not in ("20ng", "ned_company", "r8"):
+    if file not in ("20ng", "ned_company", "R8", "ohsumed", "R52", "MR", "dummy"):
         print("not supported dataset")
         exit()
 

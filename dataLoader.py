@@ -41,15 +41,24 @@ def load_Ned_company(parent):
     ret = {'doc_list': x, 'y': y}
     return ret
 
-def load_r8(data_dir):
-    with open(os.path.join(data_dir, 'doc_list'), 'rb') as f:
+def load_others(file):
+    with open(os.path.join(data_dir, file, 'doc_list'), 'rb') as f:
         doc_list = pickle.load(f)
 
-    with open(os.path.join(data_dir, 'y'), 'rb') as f:
+    with open(os.path.join(data_dir, file, 'y'), 'rb') as f:
         y = pickle.load(f)
     ret = {'doc_list': doc_list, 'y': y}
     return ret
 
+def load_meta(file):
+    with open(os.path.join(data_dir, file, 'meta'), 'rb') as f:
+        ret = pickle.load(f)
+    return ret
+
+def load_tf_idf(file):
+    with open(os.path.join(data_dir, file, 'tf_idf'), 'rb') as f:
+        ret = pickle.load(f)
+    return ret
 
 """
 warning: calling this function is deprecated. The original word_list is built using the iteration sequence from sklearn.vectorizer.vocabulary_ attribute. Sklearn vectorizer also provides get_feature_names() method which gives us the word list which is the inverse mapping of vectorizer.vocabulary_ attribute. I overlooked this utility function, so we need a middle mapping to transform from the token index(as saved in sklearn vectorizer) to the positional index in word_list (which is separately created by me). The new implementation will use the internal function of library.
@@ -72,10 +81,21 @@ def load_word_key_map(dataset):
     return m
 
 
-def load_labels(dataset):
+def load_y(dataset):
     with open(os.path.join(data_dir, dataset, 'y'), 'rb') as f:
         y = pickle.load(f)
     return y
+
+def load_class_names(dataset):
+    with open(os.path.join(data_dir, dataset, 'label_list'), 'rb') as f:
+        names = pickle.load(f)
+    return names
+
+def load_label_target_map(dataset):
+    with open(os.path.join(data_dir, dataset, 'label2target'), 'rb') as f:
+        m = pickle.load(f)
+    return m
+
 
 
 def load_word_list(dataset):
@@ -112,11 +132,13 @@ def get_20ng_train_size():
     return fetch_20newsgroups(subset='train').target.shape[0]
 
 def get_train_size(dataset):
+    train_size = None
     if dataset == "20ng":
         train_size = get_20ng_train_size()
     else:
-        with open(os.path.join(data_dir, dataset, 'train_size'), 'rb') as f:
-            train_size = pickle.load(f)
+        with open(os.path.join(data_dir, dataset, 'meta'), 'rb') as f:
+            meta = pickle.load(f)
+            train_size = meta['train size']
     return train_size
 
 def load_edge_index_weight(dataset):
@@ -139,5 +161,10 @@ def load_edge_index_weight(dataset):
     edge_index = torch.LongTensor(edge_index)
     edge_weight = torch.FloatTensor(edge_weight)
     return edge_index, edge_weight
+
+def load_doc_list(dataset):
+    with open(os.path.join(data_dir, dataset, 'doc_list'), 'rb') as f:
+        doc_list = pickle.load(f)
+    return doc_list
 
 

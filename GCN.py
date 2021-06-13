@@ -2,16 +2,11 @@ import argparse
 import logging
 from time import time
 
-import torch
-import torch.nn.functional as F
-
 # The PyG built-in GCNConv
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import GCNConv, GraphConv
 from torch_geometric.data import Data
-import torch_geometric.transforms as T
 from torch.nn import BatchNorm1d, LogSoftmax, ModuleList
 from torch.nn.functional import relu, dropout
-import copy
 import random
 from dataLoader import *
 from scipy.sparse import identity
@@ -22,6 +17,48 @@ from helper import check_valid_filename
 from sklearn.metrics import f1_score
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+class GIN(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_layers,
+                 dropout, return_embeds=False):
+
+        super(GIN, self).__init__()
+
+        # A list of GCNConv layers
+        self.convs = ModuleList(
+            [GraphConv(input_dim, hidden_dim)] + [GraphConv(hidden_dim, hidden_dim) for _ in range(num_layers - 2)] + [
+                GraphConv(hidden_dim, output_dim)])
+
+        # A list of 1D batch normalization layers
+        # self.bns = ModuleList([BatchNorm1d(hidden_dim) for _ in range(num_layers - 1)])
+
+        # The log softmax layer
+        self.softmax = LogSoftmax(1)
+
+        # Probability of an element to be zeroed
+        self.dropout = dropout
+
+        # Skip classification layer and return node embeddings
+        self.return_embeds = return_embeds
+
+    def reset_parameters(self):
+        for conv in self.convs:
+            conv.reset_parameters()
+        # for bn in self.bns:
+        #     bn.reset_parameters()
+
+    def forward(self, x, adj_t, edge_weight=None):
+        for i in range(len(self.convs)):
+            if i == len(self.convs) - 1:
+                x = self.convs[i](x, adj_t, edge_weight)
+                if not self.return_embeds:
+                    x = self.softmax(x)
+            else:
+                x = self.convs[i](x, adj_t, edge_weight)
+                # x = self.bns[i](x)
+                x = relu(x)
+                # x = dropout(x, p=self.dropout, training=self.training)
+        return x
 
 
 class GCN(torch.nn.Module):
@@ -120,7 +157,7 @@ def learn(model, data, train_idx, val_idx, test_idx, optimizer, loss_fn, epochs 
                      f'Train: {100 * train_acc:.2f}%, '
                      f'Valid: {100 * valid_acc:.2f}%, '
                      f'Test: {100 * test_acc:.2f}%, '
-                     f'F1(Micro): {f_score:.2f}')
+                     f'F1(Micro): {f_score:.4f}')
     total = time() - start
     print(f"total training time: {total}, "
           f"average time per epoch: {total / epochs:.2f}")
@@ -133,6 +170,7 @@ def parseArgument():
     parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--epochs', type=int, default=1000)
+    parser.add_argument('--train_val_ratio', type=float, default=0.9)
     args = parser.parse_args()
     args = vars(args)
     return args
@@ -188,7 +226,7 @@ if __name__ == "__main__":
     model_dir = os.path.join(parent, "model_trained", file)
 
     edge_index, edge_weight = load_edge_index_weight(file)
-    y = load_labels(file)
+    y = load_y(file)
     y = torch.LongTensor(y)
     num_class = 1 + y.max().item()
     print("num of classes: %d" % num_class)
@@ -197,7 +235,7 @@ if __name__ == "__main__":
     n = len(y) + vocab_size
     print("adjacency matrix size: (%d, %d)" % (n, n))
 
-    train_idx, val_idx, test_idx = generate_train_val_test_idx(vocab_size, n, file) # l
+    train_idx, val_idx, test_idx = generate_train_val_test_idx(vocab_size, n, file, args['train_val_ratio']) # l
 
     x = generate_one_hot_feature(n)
 
