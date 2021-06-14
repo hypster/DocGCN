@@ -146,9 +146,9 @@ def load_train_val_test_data(dataset, file, train_val_ratio = 0.9):
     train_size = int(train_val_size * train_val_ratio)
     data_train = train_val[:train_size]
     # only for the experiment
-    for data in data_train:
-        if random() < 1:
-            data.y = torch.LongTensor([int(random() * 20)])
+    # for data in data_train:
+        # if random() < 1:
+        #     data.y = torch.LongTensor([int(random() * 20)])
 
     data_val = train_val[train_size:]
     data_test = dataset[train_val_size:]
