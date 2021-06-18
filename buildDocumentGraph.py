@@ -74,22 +74,32 @@ def build_doc_graph(document, target, window_size=20, cutoff=0):
 class MyOwnDataset(InMemoryDataset):
     """This follows the torch.geometric example for creating own dataset"""
 
-    def __init__(self, root, transform=None, pre_transform=None):
+    def __init__(self, root, category='train', transform=None, pre_transform=None):
         super(MyOwnDataset, self).__init__(root, transform, pre_transform)
-        self.data, self.slices = torch.load(self.processed_paths[0])
+        if category == 'train':
+            self.data, self.slices = torch.load(self.processed_paths[0])
+        else:
+            self.data, self.slices = torch.load(self.processed_paths[1])
 
     @property
     def processed_file_names(self):
-        return ['data.pt']
+        return ['train.pt', 'test.pt']
 
-    def process(self):
-        # Read data into huge `Data` list.
+    def process_set(self, dataset):
+        meta = load_meta(file)
+        train_size = meta['train size']
+        if dataset == 'train':
+            token_list = indexed_tokens_list[:train_size]
+            target = y[:train_size]
+        else:
+            token_list = indexed_tokens_list[train_size:]
+            target = y[train_size:]
         data_list = []
-        for i, doc, in enumerate(indexed_tokens_list):
+        for i, doc, in enumerate(token_list):
             # if i > 20:
             #     break
             print("process %dth document" % (i + 1))
-            g = build_doc_graph(doc, y[i], window_size=args['window'], cutoff=args['cutoff'])
+            g = build_doc_graph(doc, target[i], window_size=args['window'], cutoff=args['cutoff'])
             data_list.append(g)
 
         if self.pre_filter is not None:
@@ -100,7 +110,14 @@ class MyOwnDataset(InMemoryDataset):
 
         data, slices = self.collate(
             data_list)  # saving collated data object is much much faster than save list of data!
-        torch.save((data, slices), self.processed_paths[0])
+        return data, slices
+
+
+    def process(self):
+        # Read data into huge `Data` list.
+        torch.save(self.process_set('train'), self.processed_paths[0])
+        torch.save(self.process_set('test'), self.processed_paths[1])
+
 
 
 def parseArgument():

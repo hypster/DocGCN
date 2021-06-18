@@ -1,5 +1,6 @@
 import os
 import pickle
+import re
 
 import torch
 from sklearn.datasets import fetch_20newsgroups
@@ -168,3 +169,24 @@ def load_doc_list(dataset):
     return doc_list
 
 
+def extract_log(file):
+    reg = re.compile('[\d]*[.][\d]+')
+    loss = []
+    train_acc = []
+    val_acc = []
+    test_acc = []
+    f1_score = []
+    arr = []
+    with open(file, "r") as f:
+        lines = f.readlines()
+        for l in lines[:-1]:
+            temp = []
+            for i, obj in enumerate(reg.finditer(l)):
+                temp.append(float(obj[0]))
+
+            arr.append(temp)
+
+    loss, train_acc, val_acc, test_acc, f1_score = list(zip(*arr))
+
+
+    return {'loss': loss, 'train acc': train_acc, 'val acc': val_acc, 'test acc': test_acc, 'f1 score': f1_score}

@@ -1,8 +1,6 @@
 from nltk.corpus import stopwords
 import nltk
-from nltk.wsd import lesk
-from nltk.corpus import wordnet as wn
-from utils import clean_str, loadWord2Vec
+from old_code.utils import clean_str
 import sys
 
 if len(sys.argv) != 2:

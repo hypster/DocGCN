@@ -44,7 +44,7 @@ def main():
                          max_iter=150)
         return acc
 
-    dirname = osp.join(osp.dirname(__file__), '20ng', "data")
+    dirname = osp.join(osp.dirname(__file__), '20ng', "../data")
     path = osp.join(dirname, "edge_index")
     with open(path, 'rb') as f:
         edge_index = pickle.load(f)
@@ -92,7 +92,7 @@ def main():
         if acc > best_valid_acc:
             best_valid_acc = acc
             best_model = copy.deepcopy(model)
-            with open(osp.join(osp.dirname(__file__), 'model_trained', "20ng_node2vec_emb_300.param"), 'wb') as f:
+            with open(osp.join(osp.dirname(__file__), '../model_trained', "20ng_node2vec_emb_300.param"), 'wb') as f:
                 pickle.dump(best_model, f)
 
         print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, Acc: {acc:.4f}')
@@ -101,10 +101,10 @@ def main():
 if __name__ == "__main__":
     # main()
 
-    p = osp.join(osp.dirname(__file__), "model_trained", "20ng_node2vec.param")
+    p = osp.join(osp.dirname(__file__), "../model_trained", "20ng_node2vec.param")
     with open(p, 'rb') as f:
         model = pickle.load(f)
-    p = osp.join(osp.dirname(__file__), "20ng","data", "20ng_y")
+    p = osp.join(osp.dirname(__file__), "20ng", "../data", "20ng_y")
     with open(p, 'rb') as f:
         y = pickle.load(f)
 

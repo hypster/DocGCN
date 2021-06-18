@@ -9,6 +9,7 @@ from GCN import GCN
 from dataLoader import *
 from helper import check_valid_filename
 from buildDocumentGraph import MyOwnDataset
+import random
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # GCN to predict graph property
@@ -80,7 +81,7 @@ def eval(model, loader, compute_f1 = False):
         pred = model(batch)
         yhat_batch = pred.argmax(dim=-1)
         corr += torch.sum(yhat_batch == batch.y.view(-1)).item()
-        total += len(pred)
+        total += len(batch.y)
         if compute_f1:
             yhat = np.concatenate([yhat, yhat_batch.detach().cpu().numpy().reshape(-1)])
             y = np.concatenate([y, batch.y.detach().cpu().numpy().reshape(-1)])
@@ -134,28 +135,24 @@ def learn(model, optimizer, loss_fn, train_loader, valid_loader, test_loader, ep
           f"average time per epoch: {total / epochs:.2f}")
 
 
-def load_train_val_test_data(dataset, file, train_val_ratio = 0.9):
-    if file == "ned_company":
-        train_val_size = int(0.8 * len(
-            dataset))  # for custom dataset where there is no fixed train test split, use 0.8 of total data size for train val set
-    else:
-        train_val_size = get_train_size(file) # other dataset comes with a default split
+def load_train_val_data(dataset, train_val_ratio = 0.9):
+    dataset = dataset.shuffle()  # shuffle the train validation set first
+    train_size = int(len(dataset) * train_val_ratio)
+    data_train = dataset[:train_size]
+    data_val = dataset[train_size:]
+    return data_train, data_val
 
-    train_val = dataset[:train_val_size]
-    train_val.shuffle()  # shuffle the train validation set first
-    train_size = int(train_val_size * train_val_ratio)
-    data_train = train_val[:train_size]
-    # only for the experiment
-    # for data in data_train:
-        # if random() < 1:
-        #     data.y = torch.LongTensor([int(random() * 20)])
-
-    data_val = train_val[train_size:]
-    data_test = dataset[train_val_size:]
-    return data_train, data_val, data_test
+def permuteLabel(data, ratio = 0.5):
+    if random.random() < ratio:
+        new_target = torch.LongTensor([[int(random.random() * num_class)]])
+        data.y = new_target
+    return data
 
 
 if __name__ == "__main__":
+    random.seed(12345)
+    torch.manual_seed(12345)
+
 
     print('Device: {}'.format(device))
     parent = os.path.dirname(__file__)
@@ -169,11 +166,17 @@ if __name__ == "__main__":
     print(data_dir)
     model_dir = os.path.join(parent, "model_trained", file)
 
-    dataset = MyOwnDataset(root=data_dir)  # load the dataset
+    # set transform function to permuteLabel for doing experiment
+    data_train_val = MyOwnDataset(root=data_dir, category='train', transform = None)  # load the dataset
+
+    data_test = MyOwnDataset(root=data_dir, category='test', transform=None)
 
     vocab_size = len(load_word_list(file))
-    dataset.vocab_size = vocab_size
-    data_train, data_val, data_test = load_train_val_test_data(dataset, file, args['train_val_ratio'])
+
+    data_train, data_val = load_train_val_data(data_train_val, args['train_val_ratio'])
+    data_train.vocab_size = vocab_size
+    data_val.vocab_size = vocab_size
+    data_test.vocab_size = vocab_size
 
     y = load_y(file)
     n = len(y)
