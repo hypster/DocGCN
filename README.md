@@ -1,5 +1,20 @@
 ### DocGCN
 
+Runtime environment:
+
+* Python 3.6
+
+Dependencies:
+
+* torch==1.7.1
+* torch-cluster==1.5.9
+* torch-geometric==1.7.0
+* torch-scatter==2.0.6
+* torch-sparse==0.6.9
+* torch-spline-conv==1.2.1
+* torchvision==0.8.2
+
+
 Note:
 
 - When first run some script, there will be hints about file not exist. Simply create the required folders will solve the issue.
